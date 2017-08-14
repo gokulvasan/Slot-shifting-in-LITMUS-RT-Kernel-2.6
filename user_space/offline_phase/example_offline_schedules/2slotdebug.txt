@@ -1,0 +1,42 @@
+/* This job set file has been automatically created with Task Set Generator v. 1 */
+/* Generation time is: 2013-06-26.10:12:15 */
+/* This is task set 6 */
+
+
+/* --------  Settings Start  -------- */
+/* Method: Smart UUnifast		*/
+/* Output File Name Base: output	*/
+/* Output File Path: a50o50dlx5-1core		*/
+/* Number of Task Sets: 10			*/
+/* Min Hyper Period: 1000			*/
+/* Max Hyper Period: 1000			*/
+/* Number of Cores: 1				*/
+/* Allowed Error: 0.01				*/
+/* Inner Loop Iterations: 20				*/
+/* Deadline Extension Factor (0 if not set): 5				*/
+/* -- Offline Task Settings -- */
+/* Core 1: target_utilization = 0.5 min_wcet = 1 max_wcet = 15 min_period = 15 max_period = 30 */
+/* -- Aperiodic Task Settings -- */
+/* Core 1: target_utilization = 0.5 min_est = 0 max_est = 0 min_wcet = 10 max_wcet = 15 min_dl = 10 max_dl = 15 */
+/* --------  Settings End  -------- */
+
+
+
+/* -------- Utilization Results Start -------- */
+/* Utilization on core 1 is created by offline guaranteed jobs: 49.1 %	*/
+/* Utilization on core 1 is created by aperiodic jobs         : 50.2 %	*/
+/* Total utilization on core 1                                 : 99.3 %	*/
+/* -------- Utilization Results End -------- */
+
+
+LCM:3;
+Cores:1;
+Jobs:2;
+/* Offline guaranteed jobs on core 1: 350 */
+/* Aperiodic jobs on core 1: 40 */
+/* Syntax: Job: ID,core,releaseTime,WCET,deadline,(NULL for periodic, 2 for aperiodic) */
+/*                                           */
+/* --- core 1 - offline guaranteed jobs --- */
+Job:0,1,0,2,3;
+Job:1,1,1,1,3,2;
+

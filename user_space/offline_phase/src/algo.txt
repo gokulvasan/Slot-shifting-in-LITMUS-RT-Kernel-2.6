@@ -1,0 +1,52 @@
+
+sort the task in decreasing order of dl to taskList
+
+// it space in the end ; add an interval with start = task.dl and end = lcm
+if ( task[0].dl < lcm )
+	add an interval[start = task[0].dl,end = lcm]
+
+if(task[0].dl > lcm)
+	throw error;
+
+for  itr = taskList.begin to taskList.end
+{	
+	pInterval = new tInterval();
+
+	//set the end of interval as dl of task
+	pInterval->end = itr->dl;
+	
+	//set the wcet of interval as wcet of task
+	pInterval->wcet = itr->wcet;
+	minest = itr->est;
+	//check for other task in the list with same dl
+	while (itr->dl == (itr+1)->dl )
+		{
+			itr++;
+			//accumutale the wcets
+			pInterval->wcet += itr->wcet;
+			//find the min est
+			if(minest>itr->est)
+				minest = itr->est;
+		}
+
+
+
+		
+	//set start of interval
+		//opt1
+		pInterval->start = pInterval->dl - pInterval->wcet;
+
+		//opt2
+		pInterval->start = pInterval->dl - minest;
+
+
+	intervalVector.add(pInterval) ; 
+
+
+}
+
+//special treatment for begining
+
+//if space remaining in the begining of time line
+//create new interval from 0 to start of the last created interval and add to the interval vector
+

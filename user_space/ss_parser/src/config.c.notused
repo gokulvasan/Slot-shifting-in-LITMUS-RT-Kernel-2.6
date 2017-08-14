@@ -1,0 +1,139 @@
+#include <assert.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <time.h>
+#include <stdio.h>
+
+#include "config.h"
+#include "fsm_parser.h"
+
+
+void usage(char *error)
+{
+	fprintf(stderr, "Error: %s\n", error);
+	fprintf(stderr,
+		"Usage: ASKHDFASJKFHDA\n");
+	exit(EXIT_FAILURE);
+}
+
+/* Real implementation of the configuration functions */
+#define OPTSTR "c:"
+void __read_command_line(int argc, char *argv[], struct configuration *conf)
+{
+	int opt;
+
+	assert(conf);
+
+	while ((opt = getopt(argc, argv, OPTSTR)) != -1) {
+		switch (opt) {
+		case 'c':
+			conf->conf_file_path = optarg;
+			break;
+		case '?':
+		default:
+			usage("Bad argument.");
+			break;
+		}
+	}
+
+	/* In case we wanted some compulsory arguments after the "-" options, we
+	 * could use the the following example:
+	if (argc - optind < 2)
+		usage("Arguments missing.");
+
+	wcet_ms = atof(argv[optind + 0]);
+ 	 */
+}
+
+void __read_conf_file(struct configuration *conf)
+{
+	conf->cpars->parse_conf(conf);
+}
+
+void no_conf_parse (struct configuration *conf)
+{
+	/* Does nothing...
+	 *
+	 * I don't want to lose time creating a .conf parser for now. If we
+	 * need it in the future, we can have it here. */
+}
+
+/* Interface to the configuration functions */
+void read_command_line(int argc, char *argv[], struct configuration *conf)
+{
+	assert(conf);
+	assert(conf->cpars);
+	assert(conf->cpars->parse_conf);
+
+	__read_command_line(argc, argv, conf);
+}
+
+void read_conf_file(struct configuration *conf)
+{
+	/* If we want to change the config file parser, we can simply change
+	 * this function call */
+	__read_conf_file(conf);
+}
+
+
+
+struct conf_parse default_conf_parse = {
+	.parse_conf = no_conf_parse,
+};
+
+#if 0
+struct table_parse default_table_parse = {
+	.parse_table = fsm_parse,
+};
+#endif
+
+struct krnl_inject default_krnl_inject = {
+};
+
+struct configuration *configuration_init()
+{
+	/* I've seen the "sizeof" used in different ways. E.g., in
+	 * http://lxr.free-electrons.com/source/init/initramfs.c
+	 * it is used like this:
+	 * struct dir_entry *de = kmalloc(sizeof(struct dir_entry), GFP_KERNEL);
+	 *
+	 * while in 
+	 * http://lxr.free-electrons.com/source/drivers/gpu/drm/radeon/radeon_mem.c
+	 * it is used like this:
+	 * struct mem_block *newblock = kmalloc(sizeof(*newblock), GFP_KERNEL);
+	 *
+	 * I decided to use the second way so that I can change the type of ret
+	 * and not have to change the type inside the "sizeof()". */
+	struct configuration *ret = malloc(sizeof(*ret));
+	if (!ret)
+		goto out;
+
+	ret->table_file_path = "./ss_input";
+	ret->conf_file_path = "./ss.conf";
+	ret->use_rtspin = 1;
+	ret->cpars = &default_conf_parse;
+	ret->tpars = &default_table_parse;
+	ret->ki = &default_krnl_inject;
+
+out:
+	return ret;
+}
+
+
+/* Interface to the user */
+struct configuration *configure_behavior(int argc, char *argv[])
+{
+	struct configuration *ret = configuration_init();
+	if (!ret)
+		goto out;
+
+	/* Command line could even modify path for .conf file */
+	read_command_line(argc, argv, ret);
+
+	read_conf_file(ret);
+
+out:
+	return ret;
+}
+
+

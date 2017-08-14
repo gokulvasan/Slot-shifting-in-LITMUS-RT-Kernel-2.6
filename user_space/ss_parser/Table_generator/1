@@ -1,0 +1,35 @@
+#!/bin/bash
+
+HP=$1
+JOB=$2
+INT=$3
+D=$1
+
+#1. HP
+echo -ne '!' >> $D
+./tgen 580 >> $D
+#echo -n  >> $D
+# HP PARAMS
+./tgen 1 >> $D
+./tgen 1 >> $D
+#2. JOB
+echo -ne '!' >> $D
+./tgen 502 >> $D
+./tgen 1 1 1 2 0 1 [1:0,] *#Gokul* >> $D
+echo -ne '!' >> $D
+./tgen 529 >> $D
+#3. INT
+echo -ne '!' >> $D
+./tgen 728 >> $D
+./tgen 1 0 1 1 0 1 >> $D
+echo -ne '!' >> $D
+./tgen 545 >> $D
+#while read line 
+#do
+#	./tgen $line
+#done < $S
+#HP_END
+echo -ne '!' >> $D
+./tgen 462 >> $D
+echo -ne '\r\n' >> $D
+echo -ne '\r\n' >> $D

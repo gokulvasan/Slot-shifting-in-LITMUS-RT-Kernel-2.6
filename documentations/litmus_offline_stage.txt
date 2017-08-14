@@ -1,0 +1,62 @@
+John Gamboa
+30/01/2014
+
+Summary
+=======
+
+ - Introduction
+ - Framework Description
+
+Introduction
+============
+
+The offline part of the Slot Shifting implementation for Litmus^RT is described.
+
+Framework Description
+=====================
+
+The offline phase of Slot Shifting guarantees the offline stages and calculates
+the intervals and the spare capacities of each interval.
+
+The Chair of Real Time Systems already has a program that executes these steps
+(that we are going to call "offline_phase" here). It expects, as input, files in
+the format which is output by another program: sam.
+
+To inject the information calculated by the offline_phase into the kernel, we
+created another program, called "ss_parser" here. The standard output of the
+offline_phase, though, is not suited for our purposes. For this reason, some
+changes in its output were done. These changes DON'T influence offline_phase's
+behavior, but only output their calculated values in a different format. A
+command line option to output the former format was inserted in the program.
+
+In the following image, the entire framework is shown:
+
+	 +-------------+
+	 |             |
+	 |     SAM     |
+	 |             |
+	 +-------------+
+	        |
+	        V
+	+---------------+
+	|               |
+	| offline_phase |
+	|               |
+	+---------------+
+	|changed  output|
+	+---------------+
+	        |
+	        V
+	+---------------+
+	|               |
+	|   ss_parser   |
+	|               |
+	+---------------+
+	        /\
+	        || system calls
+	- - - - ||- - - -
+	        ||
+	        \/
+	      KERNEL
+
+The ss_parser does its interaction with the kernel through system calls.

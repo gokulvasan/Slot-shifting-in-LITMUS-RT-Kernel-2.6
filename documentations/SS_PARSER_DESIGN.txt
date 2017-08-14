@@ -1,0 +1,109 @@
+Author: GokulVasan[gokulvas@gmail.com]
+SLOT SHIFTING TABLE PARSE AND INJECT IMPLEMENATION DETAILS
+----------------------------------------------------------
+
+PROBLEM STATEMENT:
+	slot shifting is a algorithm that combines both offline and online
+scheduling to create a algorithm that has defined acceptance ratio of 
+sporadic and aperiodic tasks. The offline part of the algorithm provides a 
+table of data which needs to be used in the online phase to run the schedule.
+	Problem we intended to solve in SS PARSER is to make the online phase
+handling the table less cumbersome and Enable Litmus RT to support static tables.
+	Second problem we inteneded to solve was add semantics and syntatic 
+definition to table parsing so that after inject to kernel needs no verification.
+	Final issue was offline phase provides us a list of jobs but Linux works 
+with Tasks and LitmusRT works with dynamic jobs and has no method to handle 
+static job list of tasks.
+	 
+DESIGN PHILOSOPHY:
+	1. Binary represenation: Make the table into binary so that parsing avoids 
+conversion and mapping is more easier.
+	2. Remove redundancy data in the table of jobs.
+	3. set represenation: Previous implementaions of SS had many files to represent
+a set of tables which we intended to remove as opening and closing many files would cause 
+unnecesary overhead in online phase, rather we created a set relation; i.e. HP would 
+be a super set and jobs and intervals that belong to this HP would be subsets grouped
+together in a single file; moreover other advantage would be multiple supersets of HP can 
+be accumulated in a single file.
+	4. Semantic correctness: Before injection we also wanted to test for the 
+correctness of the table so that after injection into kernel there is no need to 
+check the correctness.
+	5. Syntatic correctness: we also needed the table to have things at right places
+so that parsing is made mostly right.
+	6. Bonding: Tables are disjoint but associated through a set of parameters between
+tasks:jobs and Task:Intervals, we wanted to create a linux understandable direct reference 
+assocation between these relations so that run time search is drastically reduced.
+		job-task-bonding: The table holds list of jobs with a particular field called
+major-id the jobs with same major-id are grouped together into a array that belongs to single
+task. Redundancy removal phase seperates tasks common prameters from unique parameters; The idea
+is there might be possiblity of jobs that belongs to same tasks with differing common params,
+These are grouped together.
+		Task-interval-bonding: The tasks that belong to same interval are searched and
+associated together.	
+	7. Inject and packet : Adapt LitmusRT style injection into kernel along with the table 
+of data thats needed to make SS work; Another advantage of such implementation would be such a 
+scenarios could be tested on remote machines through sockets.
+
+IMPLEMENTATION IDEA:
+
+	1. Binary representaion: 
+		The syntax and semantic of the binary represenation is already 
+provided along with the parser.
+
+	2. redundancy Removal: 
+		The data that was found redundant was removed so that N jobs 
+becomes one job representing N instances thorugh indirect referencing identifiers. 
+The whole redundany removal is done at offline phase.
+This was achieved by following ways:
+		2.1. JOB REDUCTION: the data that represents the job which never
+changes are made to represent common part of the job, which is provided with
+unique-id called Minor-id.The data that represents individual jobs uniqueness
+are grouped together called association.The uniqueness of the particular job 
+is identified by minor-id+association parameter.In our scenario 
+uniqueness of the job is identified by Minor_id + [EST + Interval-id].
+		2.3. INTERVAL REDUCTION: When the Interval table arrives it 
+just holds the count of the jobs rather than job-ids(Minor-ids).In online we 
+create bonding to the Tasks.
+
+	3. Semantic Correctness: 
+		This is done at multiple level and there is no defined grouping
+of what is checked where. This definition needs to be done in the next version 
+of this parser.
+
+	4. Syntatic Correctness: 
+		Is done through normal FSM methodology where struct fsm class 
+does the exact traversal through the states. states from struct fsm perspective
+is called primary states which checks the high level syntax and enters the state,
+but every state further traverses through states called secondry states which 
+defines table parameter parsing. These secondry states are divided into Surface
+states, extraction states and exit states, These states are traversed one after
+other recursively till one of exit state returns a end value. the secondry states
+holds transition function which is called at the end of every state to decide on
+next states. 
+		File Name: src/ss_parser.c
+		Entry Function Name: parsing_main().
+		class Name: struct fsm.
+		Config File name: /conf/ss_parser.conf
+				 config file works like a regulator to tune syntax.
+
+	5.Bonding and Inject Phase: 
+		Is achieved in 2 phases and is very specific to Slot shifting.The 
+bonding tries to associate indirectly associated elements of a table into a 
+direct reference association.As bonding is done injection to kernel is done 
+concurrently.
+		5.1. Job-Task Bonding: First we seperate params to injectable and
+non-injectable part, Second we need to make a packet like implementaion of the whole
+bonding so that it can be sent in single stretch to kernel. this packet implementation
+needs two level dynamic array; where first level is implementaed with offset mehanism
+and second level is normal array mechanism on first level.
+			File Name: src/ss_tsaheylu.c
+			Entry Function: ss_job_to_task()
+		5.2. Task-Interval-Bonding: Once the tasks are injected the intervals
+needs PID of the tasks which belongs to them so that they can search at kernel space for
+task_struct and get themselves associated.
+			Entry Function: ss_intr_task_bond()
+
+	6. Debugging directives:
+			DEBUG : prints the step level execution
+			SYS_HOST: provides a simulation of injection with ls binary.
+  

@@ -1,0 +1,111 @@
+
+SIGNAL IN LINUX KERNEL 
+
+#define SIG_COMPLETE 44
+#if 0
+	diff = curr->wcet - curr->job->exec_count;
+
+	TRACE("SS_TRACE: curr->wcet: %llu, exec_count: %llu, diff: %u\n",
+		curr->wcet, curr->job->exec_count, diff);
+	if(1 == diff) {
+		TRACE("SS_TRACE: last slot");
+		if(!last_slot) 
+			last_slot = 1;
+
+		struct task_struct *t = tsk->os_task;
+		struct siginfo info;
+		int ret;
+
+		memset(&info, 0, sizeof(struct siginfo));
+		info.si_signo = SIG_COMPLETE;
+		info.si_code = SI_KERNEL;	// this is bit of a trickery:
+						// SI_QUEUE is normally used by
+						// sigqueue from user space,
+						// and kernel space should use
+						// SI_KERNEL.
+						// But if SI_KERNEL is used the
+						// real_time data
+						// is not delivered to the user
+						// space signal handler function.
+
+		info.si_int = curr->jindex;	//send the job index as param.
+
+		TRACE("SS_TRACE: SIG COMPLETE_JOB will be triggered\n");
+		ret = send_sig_info(SIG_COMPLETE, &info, t); //send the signal
+		if (ret < 0) {
+			TRACE("SS_TRACE: ERROR: SIG COMPLETE_JOB could not be sent\n");
+			ss->dh->update_tsk_state(ss->dh, tsk, UNKNOWN);
+		}
+		signal_wake_up(t, 1);
+		//schedule();
+		litmus_reschedule_local();
+	}
+#endif
+
+	update_task_quantum
+	/* Algorithm:
+	 *	1. update task exec_cnt
+		2. if(exec_cnt == WCET) {
+			change task state:
+			state = DORMANT;
+			if(running){
+				2.1 update curr_job to nxt job
+				2.2 if(!nxt job) {
+					state = FINISHED;
+				}
+			}
+		}
+		else {
+			state = READY;
+		}
+		
+	 */
+
+#if 0 // for now this is not needed
+
+struct job_bond* ss_srch_job(
+		struct minor_id_bond *minr_level,
+		const lt_t est) {
+	
+	lt_t j_est;
+	int j_cnt = 0;
+	struct job_bond *fnd_job = NULL;
+
+	while(j_cnt < minr_level->intr_count) {
+
+		j_est = minr_level->intr_bond[j_cnt].est;
+ 		if(est == j_est) {
+			fnd_job = &(minr_level->intr_bond[j_cnt]);
+			break;
+		}
+		j_cnt++;
+	}
+	return fnd_job;
+}
+
+int is_task_ready(struct ss_task_struct *tsk,
+				lt_t est){
+	int minor_cnt = 0;
+	void *ptr;
+	struct minor_id_bond *minor_level;
+	struct job_bond *job;
+	struct ss_queue_job *queue_job = NULL;				
+
+	if(est == curr_job)
+		minor_level = tsk->curr_job.minor_id;
+		
+		queue_job->est = est;
+		queue_job->dl = minor_level->dl + est;
+		queue_job->wcet = minor_level->wcet;
+		queue_job->job = job;
+		queue_job->minor_id = minor_level;
+		INIT_LIST_HEAD(&queue_job->list);
+
+			break;
+		}
+		minor_cnt++;
+	return queue_job;
+} 
+#endif
+
+

@@ -1,0 +1,238 @@
+
+/*============Definition of TaskSet that needs to be fed to the parsing tool===============================*/
+
+Note:
+	Definition here is the format that needs to be given to the tool that injects the jobs and interval
+to the kernel space.
+
+Assumption: assumes that offline works perfectly and the value defined are resolved as per the joint
+	    scheduling algorithm's offline scheduling.all the time-unit is considered discrete.
+
+General Introduction: 
+	 we need 2 tables within a hyperperiod(very specific to SlotShifting), 
+	i.e. interval table and job table; The whole table needs
+	to be in a file which needs to be fed to the compilation tool that parses the data and 
+	injects the data into kernel space, The sequence would be a job table followed by interval table
+	and the delimiters for start and end of the table should be the magic number preceded by
+	table seperator.
+
+Specific Details: 
+	We have 2 different data to represent:
+	1. TABLE: alias data is a set of same kind of data.
+	2. FIELD: subset of table.
+
+	MAGIC_NUMBER for data seperation:
+	magic number definition: Σ ascii value of the string in hex,
+				 should be 4 bytes long data.
+	1. INTERVAL_START 0x2D8
+	2. JOB_START 0x1F6
+	3. HP_START 0x244
+	4. HP_END  0x1CE
+	5. INTERVAL_END 0x221
+	6. JOB_END 0x211
+
+	CONSTANTS USED:
+
+	1. IMAX: Maximum no of interval allowed within hyperperiod.
+	2. N: Maximum number of slots allowed within the hyperperiod
+	3. JMAX: maximum number of jobs allowed within hyperperiod.
+	4. _SC_NPROCESSORS_ONLN : linux constant, number of cores in the machine.
+	5. PATH_MAX: maximum path length that is allowed. in ext3 it is 255 bytes.
+	6. MAX_NON_STRING_FIELD_LENGTH: max length of each field other than stringed constants like path.
+					This should be same for all fields.should be specified in bytes.
+
+	DELIMITERS USED:
+	1. !  : table seperator : used to seperate tables,i.e. job table and interval table.
+	2. ,  : primary field seperator : used to seperate field within a table.
+	3. [] : secondary field seperator : used to group sequence of same fields.
+	4. ':': colon seperator: used for grouping together related fields.  
+
+	GENERAL OVERVIEW:
+
+	!HP_START[EOL]
+
+		job_count, interval_count, interval_association_count, slot_count, slot_quantum [EOL]
+
+		!JOB_START[EOL]
+			minor_id, major_id, WCET, dl, CoreID, IntervalCount,[ intr_id:est,...], binary[PATH_MAX] [EOL]
+		!JOB_END[EOL]
+
+		!INTERVAL_START[EOL]
+			IntervalID, core_id, start, end, spare_capacity, NumberOfJobs[EOL]
+		!INTERVAL_END[EOL]
+
+	!HP_END[EOL]
+	.
+	.
+	.
+	!HP_START[EOL]
+	.
+	.
+	.
+	!HP_END[EOL]
+	[EOL]
+	[EOL]
+	[EOF]
+
+ 	Advantage of such an implementation:
+	 1.state machine based parsing implementation is iterativly possible.
+	 2.Multiple Hyper-period can be incorporated within the same file.
+
+	GENERAL COMMENT:
+
+
+	1. We need to use config like implementation to define constants and delimiters.
+
+	2. There should be no space between variables, The definition uses space for better legibility.
+	   in other words whenever a parameter ends and a delimiter is used to seperate them should
+	   start immediately after the param.
+	3. [EOL] : end of line should be '/r/n' i.e. of 2 bytes long
+		 where '/r' is carriage return and '/n' is end of line
+		 hex values: '/r' == 0D and '/n' == 0A
+		 WARNING: brackets are used for legibility not actual syntax.
+	4. ss_parser.conf: this is the file where the defined constants can be tuned and if changed then this
+			document should also be changed, 
+			i.e. semantic(ss_parser/README) == semantic(ss_parser.conf)
+
+	 Interval definition: INTERVAL_START, INTERVAL_END.
+
+	!INTERVAL_START[EOL] /* Magic number*/
+	IntervalID, core_id, start, end, spare_capacity, NumberOfJobs[EOL] /* values */
+	!INTERVAL_END[EOL] /* Magic number*/
+
+	Details:
+
+	1. General Definition:
+		1.1. parameters of the table are seperated by comma.
+		1.2. end of a row is checked by EOL.
+		1.3. the interval table should be sorted based on the intervalID in ascending order;
+		     where the intervalID defines the sequence of execution .
+	2. parameter defintion:
+		2.1. IntervalID:
+			2.1.1. That identifiies the interval,
+			2.1.2. type:  unsigned int/ atleast 32 bits unsigned datatype.
+			2.1.3.  value range:only +ve, 0 - IMAX.
+		2.2. start :
+			2.2.1. defines the start slot of the interval.
+			2.2.2. type: unsigned int.
+			2.2.3. value range:only +ve, 0 - N.
+		2.3. end:
+			2.3.1. defines the end of the interval.
+			2.3.2. type: unsigned int.
+			2.3.3. value range:only +ve, 0-N, N: number of slots within the hyperperiod.
+		2.4. Spare_capacity:
+			2.4.1. defines spare capacity of the interval.
+			2.4.2. type: signed int.
+			2.4.3. value range: -ve to positive.
+		2.5. NumberofJobs:
+			2.5.1. defines the number of jobs within this interval.
+			2.5.2. type: unsigned int/ atleast 32 bit unsigned datatype.
+			2.5.3. value: 0 - JMAX.
+		2.6. core_id:
+			2.7.1. Core to which the corresponding interval belongs.
+			2.7.2. type: unsigned short
+			2.7.3. value: only +ve, 0-(_SC_NPROCESSORS_ONLN - 1)
+
+	3.  JOB definition: JOB_START / JOB_END
+	
+	high level table format of the job looks like.
+
+	!JOB_START[EOL] /* Magic Number */
+	minor_id, major_id, WCET, dl, CoreID, IntervalCount,[ intr_id:est,...], binary[PATH_MAX] [EOL]
+	!JOB_END[EOL] /* Magic Number*/
+
+	Details:
+
+	1. General Definition:
+		1.1. job table should be sorted in a sequence such that  it can directly be associated through
+			its major_id, i.e jobs with same major_id should be in a contiguous sequence.
+		1.3. The parameters are seperated by comma, square brackets.
+		1.4. The jobs are sperated by a row which is delimited by EOL.
+
+	2. parameter definition:
+
+		2.1. minor_id:
+			2.1.1. provides unique id to the job within major_id/ task.
+			2.1.2. type: unsigned int / at-least 32 bit unsigned data type.
+			2.1.3. value: only +ve, 1 - JMAX.
+		2.2. major_id:
+			2.2.1. unique id that brings jobs of a particular task together.
+				basically major-id defines unique task-id representation.
+				associating jobs of the same binary together.
+			2.2.2. type: unsigned int / at-least 32 bit unsigned data type.
+			2.2.3. value: only +ve, 1 - TMAX.
+		2.3. WCET:
+			2.3.1. Absolute Worst case execution time of the job.
+			2.3.2. type: unsigned int / at-least 32 bit unsigned datatype.
+			2.3.3. value: only +ve, 1 - N.
+		2.4. dl:
+			2.4.1. Absolute deadline of the job.
+			2.4.2. type: unsigned int.
+			2.4.3. value: only +ve, 1 - N.
+		2.5. CoreID:
+			2.5.1. core to which the job belongs.
+			2.5.2. type: unsigned short.
+			2.5.3. value: only +ve, 0-_SC_NPROCESSORS_ONLN.
+		2.6. intervalCount:
+			2.6.1. total count of the intervals to which this minor id
+				is associated.
+			2.6.2. type: unsigned  int.
+			2.6.3. value: only +ve
+		2.7. [ intr_id:est,... ]:
+			2.7.1. general comment:
+				2.7.1.1. This is an  approach to bring n same jobs of one task to one.
+					Doing this avoids redundancy of tabling N jobs 
+					with similair params of a task.
+				2.7.1.2. there might be N groupings of intrvl_id and est within the square 
+					bracket, where N == intervalCount of the job. 
+				2.7.1.3. Colon is used for grouping interval and est; comma is used for 
+					seperating such groupings.
+				2.7.1.4. combining minor_id, major_id, est and intr_id will provide a uniqueid
+			2.7.2. intr_id:
+				2.7.2.1. this is the interval to which job belongs
+					 should map exactly with some interval in interval table.
+			2.7.3. est:
+				2.7.3.1. This is the relative data of the job, representing exactly 
+					 the slot within hyper period at which it can become ready to start.
+				2.7.3.2. type: unsigned int
+				2.7.3.3. value +ve, 0 - slot_count
+		2.7. binary:
+			2.7.1. the programme that corresponds to this job, in the form of path which could
+				either relative or absolute, it is ((void*)0) when we use rtspin.
+			2.7.2. type: unsigned char / string.
+			2.7.3. value: should be PATH_MAX of 0xFF(if no binary)or path to the binary.
+				      if ( path < PATH_MAX ), remaining count of the PATH_MAX string
+				should be Hexvalue 0xFF; which is undefined value in ASCII.
+
+	3. Hyperperiod definition:
+		
+		job_count, interval_count, interval_association_count, slot_count, slot_quantum [EOL]
+		3.1. job_count:
+			3.1.1. provides the number of jobs within the HP
+			3.1.2. 0 < job_count <= JMAX
+			3.1.3. type: unsigned int
+		3.2. interval_count:
+			3.2.1. provides the number of intervals 
+			3.2.2. 0 < interval_count <= IMAX
+			3.2.3. type: unsigned int
+		3.3. interval_association_count:
+			3.3.1. provides total (interval,job) association count.
+				i.e. ∃ k | K = Σɣ . (N= total job count) E hyper period
+				 ɣ := Σi.i = per grouping of 3-2.7.
+			3.2.2. type: unsigned int.
+		3.4. slot_count:
+			3.4.1. total slots within hyperperiod.
+			3.4.2. type: unsigned int.
+		3.5. slot_quantum:
+			3.5.1. per slot width, should be defined in MS.
+			3.5.2. type: unsigned int.  
+		
+
+===================================
+
+TODO PARSER: 
+1. intervals needs sorting according to core.
+2. seperate table for TASK.
+
+
+

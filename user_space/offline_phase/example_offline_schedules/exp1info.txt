@@ -1,0 +1,83 @@
+1000slots_4cores_10offl_50aper_dlx5
+
+
+DLX 1.5
+
+balanced number of offline jobs per core
+=============================================
+-few jobs
+---------------------------------------------
+output0
+Jobs:295;
+/* Offline guaranteed jobs on core 1: 33 */
+/* Offline guaranteed jobs on core 2: 33 */
+/* Offline guaranteed jobs on core 3: 33 */
+/* Offline guaranteed jobs on core 4: 33 */
+
+
+-many jobs
+---------------------------------------------
+output1
+Jobs:577;
+/* Offline guaranteed jobs on core 1: 107 */
+/* Offline guaranteed jobs on core 2: 108 */
+/* Offline guaranteed jobs on core 3: 105 */
+/* Offline guaranteed jobs on core 4: 94 */
+
+
+
+unbalanced number of offline jobs per core
+=============================================
+output2
+Jobs:434;
+/* Offline guaranteed jobs on core 1: 102 */
+/* Offline guaranteed jobs on core 2: 103 */
+/* Offline guaranteed jobs on core 3: 35 */
+/* Offline guaranteed jobs on core 4: 33 */
+
+
+
+
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+
+DLX 5
+
+balanced number of offline jobs per core
+=============================================
+-few jobs
+---------------------------------------------
+output3
+Jobs:297;
+/* Offline guaranteed jobs on core 1: 35 */
+/* Offline guaranteed jobs on core 2: 35 */
+/* Offline guaranteed jobs on core 3: 33 */
+/* Offline guaranteed jobs on core 4: 34 */
+
+
+
+
+-many jobs
+---------------------------------------------
+output4
+Jobs:553;
+/* Offline guaranteed jobs on core 1: 103 */
+/* Offline guaranteed jobs on core 2: 99 */
+/* Offline guaranteed jobs on core 3: 94 */
+/* Offline guaranteed jobs on core 4: 96 */
+
+
+
+unbalanced number of offline jobs per core
+=============================================
+output5
+Jobs:419;
+/* Offline guaranteed jobs on core 1: 93 */
+/* Offline guaranteed jobs on core 2: 34 */
+/* Offline guaranteed jobs on core 3: 97 */
+/* Offline guaranteed jobs on core 4: 34 */
+
+
+

@@ -1,0 +1,239 @@
+John Gamboa
+06/11/2014
+
+Summary
+=======
+
+1. Introduction
+2. Abstract Algorithm
+3. Some LITMUS^RT Functions and Concepts
+	3.1 Legacy scheduling plugins
+	3.2 New plugins
+4. Implementation Details
+	4.1 Core functionalities
+	4.2 Data structures
+	4.3 Other reservation aspects
+
+
+Introduction
+============
+
+This document present a description of the current planned implementation of
+Slot-Shifting as a scheduling plugin for LITMUS^RT.
+
+New schedulers for LITMUS^RT are supposed to use the P-RES scheduling plugin,
+along with the reservation framework.
+
+
+Abstract Algorithm
+==================
+
+Assume `schedule()` is only called between slots.
+
+In a very abstract way, Slot Shifting should behave like the following:
+
+	function guarantee_algorithm()
+	begin
+		if(needs to split an interval)
+			split_interval()
+
+		insert_task_in_interval()
+		recalculate_spare_capacities()
+	end
+
+	function schedule()
+	begin
+		update_current_slot()
+		update_current_interval()
+
+		acceptance_test()          [if we want it in the `schedule()`]
+
+		if (there are new accepted tasks)
+			for each new accepted task t
+				guarantee_algorithm(t)
+
+		choose_task_to_run()
+
+		calculate_spare_capacities()
+	end
+
+
+
+Some LITMUS^RT Functions and Concepts
+=====================================
+
+Legacy scheduling plugins
+-------------------------
+
+In the past, implementing a new scheduler in Litmus meant implementing a set of
+functions belonging to `struct sched_plugin` and inserting this structure into
+Litmus data structures.
+
+A description of these functions can be found at `sched_plugin.h`. We describe
+below the ones that are important to us.
+
+  * schedule(): called by Litmus when a schedule decision needs to be made.
+  * finish_switch(): called by Litmus when context switch is completed.
+  * admit_task(): called by Litmus when a new task arrives (an acceptance test
+	can be done here.
+  * task_new(): called by Litmus when a task becomes a Real Time task (i.e.,
+	usually soon after `admit_task()` was called and returned success).
+  * task_wakeup(): called by Litmus when a task is moved from the "wait queue" to
+	the "ready queue".
+  * task_block(): called by Litmus when a task moves to the "wait queue".
+  * task_exit(): called by Litmus when a task becomes a non-Real Time task or is
+	finished.
+  * task_cleanup(): called by Litmus after task_exit(), for cleanup procedures.
+  * activate_plugin(): called by Litmus when the plugin is activated.
+  * deactivate_plugin(): called by Litmus when the plugin is deactivated.
+
+According to Professor Brandenburg's thesis, the `tick()` function should be
+implemented for time triggered schedulers. The `tick()` function, however, was
+removed from LITMUS^RT in its most recent versions.
+
+There is also an "init" function that is called when the scheduler plugin is
+registered (i.e., inserted in Litmus data structures).
+
+
+New schedulers
+--------------
+
+The reservation wip-reservation framework introduced a new way of creating
+schedulers for LITMUS^RT. New schedulers are based on the P-RES plugin. It
+already contains the implementation of most of the functions described above.
+The plugin is based on a set of data-structures called "reservations". To create
+a new scheduler, one is expected to create a new type of "reservation" and
+implement its operations (dispatch, replenish budget, charge budget, ...). These
+operations implement the logic of the new scheduler. They are:
+
+  * dispatch(): called by `schedule()` to know which client should be scheduled
+	next.
+  * replenish(): refill the reservation's budget.
+  * charge_budget(): spends the reservation's budget.
+  * client_arrive(): called when a new client is inserted into the reservation.
+  * client_departs(): called when a client is taken out of the reservation.
+
+For more details on the internals of the reservation framework, refer to
+wip-reservations.txt in the wip-reservation folder in our git repository.
+
+
+
+
+Implementation Details
+======================
+
+Core functionalities
+--------------------
+
+Since the `schedule()` function is already implemented by the P-RES plugin, we
+have no control on its behavior. It calls, however, our reservation's
+`dispatch()` function. The following sketch shows our intended implementation
+for `dispatch()`:
+
+	dispatch()
+	{
+		if (should_run_slot_shift())
+			slot_shift()
+	}
+
+
+Because `dispatch()` will be called every time `schedule()` is called, and since
+the Slot Shifting core normally should execute only between slots, we make
+`dispatch()` test if it is time to run `slot_shift()` or not. This test is done
+in `should_run_slot_shift()`.
+
+
+
+<<<<<<<<<<<<<<<<<<<<
+What to return if it is not time to run `slot_shift()`?
+
+What to do if an RT task blocks? Should `dispatch()` tell the kernel to choose
+a new task "on its own"?
+
+And what if an RT task unblocks? Should we call `slot_shift()`? Or should we
+just see if it is the task that *should* be running and, if it is, make it run?
+
+~~ for now, I am disregarding the problems we can have when we go multicore ~~
+<<<<<<<<<<<<<<<<<<<<
+
+
+
+We want our data structures to be generic enough, so that we don't have any
+problem if we need to replace the types of the data structures or functions we
+are using. For this reason, `dispatch()` will actually blindly use a function
+pointer to call `slot_shift()` (or any other function).
+
+This way, dispatch() will have access to a data structure containing function
+pointers to all the Slot Shifting functionalities. The planned implementation of
+`slot_shift()` is as follows:
+[notice that we also intend to use function pointers]
+
+	slot_shift()
+	    |
+	    +---> update_current_state()
+	    |         |
+	    |         +---> update_current_slot()
+	    |         |
+	    |         +---> update_current_interval()
+	    |         |
+	    |         +---> update_ready_queue()
+	    |
+	    +---> guarantee_algorithm()
+	    |         |
+	    |         +---> split_interval() (maybe)
+	    |         |
+	    |         +---> calculate_spare_capacities()
+	    |
+	    +---> choose_task_to_run()
+	    |
+	    +---> calculate_spare_capacities()
+
+
+Data structures
+---------------
+
+As explained in the previous section, `dispatch()` gets a pointer to a structure
+containing pointers to the needed functions and data structures. Specifically,
+this structure contains:
+
+ - Function pointers to the Slot Shifting core functionalities;
+ - Function pointers to functions that will handle our data structures;
+
+Our ready queue will be an RBtree, which will be update every slot.
+
+<<<<<<<<<<<<<<<<<<<<
+Decide/explain more on how these trees will be used.
+<<<<<<<<<<<<<<<<<<<<
+
+
+
+Other reservation aspects
+-------------------------
+
+As can be seen in the previous chapter, each reservation has a budget. Our
+concept of budget is the same as that of the table_driven_reservation: we charge
+(i.e., spend) the budget everytime any client of the Slot-Shifting reservation
+runs. We replenish the budget in the beginning of the first task of our
+hyperperiod.
+
+	charge_budget()
+	    |
+	    +---> table_driven_charge_budget()
+
+	replenish()
+	    |
+	    +---> table_driven_replenish()
+	    |
+	    +---> restore_original_intervals_state()
+
+
+	client_arrive()
+	    |
+	    +---> acceptance_test()
+
+
+	client_departs()
+	    |
+	    +---> does nothing?
+
+

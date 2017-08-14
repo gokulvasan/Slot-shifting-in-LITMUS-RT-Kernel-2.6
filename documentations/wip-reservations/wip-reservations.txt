@@ -1,0 +1,337 @@
+John Gamboa
+06/11/2014 -- Last update 12/11/2014
+
+Summary
+=======
+
+ - Introduction
+ - The P-RES Plugin
+ - The Reservation Data Structure
+ - The SUP_ Reservation Environment
+ - Building Upon the Reservation Framework
+
+
+Introduction
+============
+
+This documents presents a description of the behavior of the Reservation
+Framework, which intends to replace the way new schedulers are created in
+LITMUS^RT.
+
+
+
+The P-RES Plugin
+================
+
+As any scheduler plugin, the P-RES scheduler implements the functions needed for
+the `struct sched_plugin` data structure. It doesn't have, however, any code on
+deciding "which should be the next task to run". Rather, it manipulates a data
+structure called "reservation" (`struct reservation`) that can be created at
+will by the user space through some new system calls (added to liblitmus).
+
+Reservations are generic data structures. They carry a budget, a priority and a
+list of clients. Clients could be anything (other reservations, a task, ...).
+They also carry function pointers to defined operations, such as "what to do
+when a new client enters the reservation", "what to do when a client gets out of
+the reservation", "how/when to replenish its budget", ...
+
+It is possible to use the reservation data structure to create new "flavors" of
+reservations. Two examples already exist: table-driven and polling reservations.
+Both redefine the default operations and add new variables to store internal
+state.
+
+The P-RES plugin has a list of so-called "active" reservations. When deciding
+what task runs next (i.e., when `schedule()` is called), it simply calls the
+highest priority active reservation's `dispatch()` function. It doesn't make,
+therefore, any scheduling decision, leaving this decision entirely for the
+reservation code. Note that this reservation code could have been overriden in
+new reservation types, and thus this provides a new abstraction upon which
+schedulers could be created.
+
+When a task requests to become a RT-task in a specific reservation, P-RES
+simply associates that client to the given reservation (in `admit_task()`).
+
+The `task_new()` function would then insert the client in the reservation.
+At this point, the reservation's `client_arrive()` function is called. Again,
+this code is reservation specific and could be overriden by new reservation
+types.
+
+
+
+The Reservation Data Structure
+==============================
+
+A reservation represents an (not necessarily) isolated scheduler attached to a
+core. It has a budget, a priority and a list of clients. The following
+subsections describe its code and how to use it from the user space.
+
+
+Description of the Data Structures
+----------------------------------
+
+The following code shows a simplified version of the `struct reservation` data
+structure. We will incrementally including variables as we discuss new details:
+
+	struct reservation {
+		reservation_state_t state;
+		unsigned int id;
+
+		/* exact meaning defined by impl. */
+		lt_t priority;
+		lt_t cur_budget;
+		lt_t next_replenishment;
+
+		struct reservation_ops *ops;
+		struct list_head clients;
+
+		/* ... */
+	};
+
+Each reservation has a priority, a budget, a state, and an indication of when
+the next replenishment must happen. These variables are used by the reservation
+operations to store internal information to the data structure. The operations
+are defined by function pointers belonging to the `ops` structure:
+
+	struct reservation_ops {
+		dispatch_client_t dispatch_client;
+
+		client_arrives_t client_arrives;
+		client_departs_t client_departs;
+
+		on_replenishment_timer_t replenish;
+		drain_budget_t drain_budget;
+	};
+
+Although a "default implementation" is already provided for these functions,
+changing the function pointer allows one to implement any behavior internal to
+the reservations.
+
+As you can see, each reservation also has a list of clients. The semantics of
+their insertion into or removal from the reservation is defined by the
+operations `client_arrives` and `client_departs`. These clients could either be
+tasks or any other data structure.
+
+The meaning of other operations can also be overriden. The meanings of both the
+use and the replenishment of the budget are defined by the functions pointed in
+`drain_budget` and `replenish`. Finally, the semantics of "dispatching" is also
+defined by the `dispatch_client` function, which is called by the P-RES plugin
+to decide the next running task.
+
+Finally, if you look below at the real code of the `struct reservation` you will
+notice that each reservation can belong to a list and points to a `struct
+reservation_environment`. The environment is described later in this document.
+Some budget "statistics" variables are also stored in the reservation.
+
+	struct reservation {
+		/* used to queue in environment */
+		struct list_head list;
+
+		reservation_state_t state;
+		unsigned int id;
+
+		/* exact meaning defined by impl. */
+		lt_t priority;
+		lt_t cur_budget;
+		lt_t next_replenishment;
+
+		/* budget stats */
+		lt_t budget_consumed; /* how much budget consumed
+					in this allocation cycle? */
+		lt_t budget_consumed_total;
+
+		/* interaction with framework */
+		struct reservation_environment *env;
+		struct reservation_ops *ops;
+
+		struct list_head clients;
+	};
+
+
+Creating a Reservation from User-space
+--------------------------------------
+
+To create a reservation, one could use the following system calls:
+
+	int reservation_create(int rtype, void *config);
+	int reservation_destroy(unsigned int reservation_id, int cpu);
+
+These calls are implemented by the currently active scheduler plugin. For P-RES,
+new code could be included to allow new types of reservations.
+
+Liblitmus already provides a convenience program called `resctrl` to create
+new reservations. The line below would create a new table-driven reservation
+with ID 1234 associated to the core 0. Table-driven reservations expect a "major
+cycle" and a set of intervals, so that they know they can execute only at those
+intervals. The option -m and the intervals in the end of the provide this
+additional information:
+
+	$ resctrl -n 1234 -t table-driven -m 1000 -c 0 [50,100] [750,800]
+
+`resctrl` is also capable of inserting a new task into a reservation. The
+following line inserts task with PID 20000 in reservation 1234:
+
+	$ resctrl -a 20000 -r 1234 -c 0
+
+Of course, it is possible to use liblitmus directly. In this case, you should,
+in `struct rt_task` (which is passed to the kernel through the
+`set_rt_task_param()` system call), set the variable `cpu` to the ID of the
+reservation you want the task to be associated to. P-RES will interpret the
+`cpu` as the reservation ID. For example:
+
+	/* Adapted from rtspin.c */
+	struct rt_task param;
+	init_rt_task_param(&param);
+
+	param.exec_cost = wcet;
+	param.period = period;
+	param.priority = priority;
+	param.cls = class;
+	param.budget_policy = NO_ENFORCEMENT;
+
+	param.cpu = reservation; /* <---- HERE */
+
+	ret = set_rt_task_param(gettid(), &param);
+
+Finally, both `rtspin` and `rt_launch` provide the -r option, that could also
+be used to create new tasks in a specific reservation. The following lines
+create a new task in reservation 1234 in core 0:
+
+	rt_launch -p 0 -r 1234 100 100 -e find /
+	rtspin -p 0 -r 1234 -v 10 100 60
+
+
+
+
+The SUP_ Reservation Environment
+================================
+
+Description of the Data Structure
+---------------------------------
+
+As we have seen in the previous section, all the existing reservations are
+stored in a data structure called `struct sup_reservation_environment` (which we
+will call "sup_environment" for short). The sup_environment stores the current
+time as well as four lists of reservations:
+
+  - The currently active reservations;
+  - The currently depleted reservations;
+  - The currently inactive reservations.
+	[TODO: when is a reservation inactive?]
+
+Below you can see the sup_environment data structure:
+
+	struct sup_reservation_environment {
+		struct reservation_environment env;
+
+		/* ordered by priority */
+		struct list_head active_reservations;
+
+		/* ordered by next_replenishment */
+		struct list_head depleted_reservations;
+
+		/* unordered */
+		struct list_head inactive_reservations;
+
+		/* - SUP_RESCHEDULE_NOW means call sup_dispatch() now
+		 * - SUP_NO_SCHEDULER_UPDATE means nothing to do
+		 * any other value means program a timer for the given time
+		 */
+		lt_t next_scheduler_update;
+
+		/* set to true if a call to sup_dispatch() is imminent */
+		bool will_schedule;
+	};
+
+Notice that the sup_environment stores a `struct reservation_environment`, which
+contains the environment "starting" time, the current time, and a pointer to a
+function that reservations can call to request changing from one of the lists to
+another one. Its definition can be seen below:
+
+	struct reservation_environment {
+		lt_t time_zero;
+		lt_t current_time;
+
+		/* services invoked by reservations */
+		reservation_change_state_t change_state;
+	};
+
+
+
+Using the SUP_ Reservation Environment
+--------------------------------------
+
+The most important functions in the sup_environment are described below.
+
+### sup_update_time()
+
+Before any sup_ function is called, the scheduler plugin (in our case, P-RES) is
+expected to call `sup_update_time()`. The function does three things:
+
+  1. Updates the current time in the environment;
+  2. Drains the budgets of the reservations that should have their budget
+	drained (i.e., calls the reservation's `drain_budget()` function);
+  3. Replenishes the budgets of the reservations that should have their budget
+	replenished (i.e., calls the reservations't `replenish()` function).
+
+Step 2 acts only in the active reservations list. It calls `drain_budget()`
+in all reservations in the list (which is ordered by priority) until it finds
+the first non-idle reservation. The following pseudo-code describes the
+operation:
+
+	for_each reservation r in active_list
+		r.drain_budget(res, delta);
+		if (r.state = ACTIVE)
+			break
+
+Notice that the reservation's `drain_budget()` function could do anything (i.e.,
+it is independent of what the SUP_ Environment understands as budget).
+
+Step 3 acts only in the depleted reservations list. It calls `replenish()` in
+all reservations whose `next_replenishment` time variable is smaller than (i.e.,
+is in the past in relation to) the current time. Since the depleted list is
+ordered by next_replenishment, it stops when it finds the first reservation that
+still needs to wait some time until its next replenishment. The following
+pseudo-code describes the operation:
+
+	for_each reservation r in depleted_list
+		if (r.next_replenishment <= current_time)
+			r.replenish(res);
+		else
+			break;
+
+
+### sup_dispatch()
+
+Instead of calling directly a reservation's `dispatch()` function, the P-RES
+plugin calls the sup_environment's `sup_dispatch()` function:
+
+	for_each reservation r in active_list
+		if (r.state = ACTIVE)
+			tsk = r.dispatch_client(res, &time_slice);
+			if (tsk)
+				sup_scheduler_update_after(sup_env,
+						res->cur_budget);
+				return tsk;
+
+Notice that, in case the highest priority reservation doesn't return a task,
+the next reservation is given the opportunity to dispatch one of its clients.
+
+After a client task is found, `sup_scheduler_update_after()` is called, so that
+the sup_environment updates itself again soon.
+
+
+Building Upon the Reservation Framework
+=======================================
+
+As we have seen, P-RES plugin delegates its scheduling decisions to
+`sup_dispatch()`. We also noted that the sup_environment delegates its decisions
+to its reservations, according to the priorities.
+
+The combination of both data structures along with the reservations allows us
+to create any scheduler. It is the task of the reservation to decide when its
+next replenishment will occur, what "budget" and "replenishment" mean, how many
+clients they can hold, in which order they are sorted, and, most importantly,
+what to do in the `dispatch()` function.
+
+TODO: describe the table_driven and the polling reservations...
+

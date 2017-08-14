@@ -1,0 +1,141 @@
+John Gamboa
+11/12/2014 -- Last update 11/12/2014
+
+Summary
+=======
+
+ - Introduction
+ - Tracing
+	- Tracing Example
+
+Introduction
+============
+
+This document describes some kernel debugging techniques we use.
+
+Tracing is not described at all: we only point the reader to the related
+resources. Other techniques are then described.
+
+
+
+Tracing
+=======
+
+For an explanation of the tracing procedure and of the tracing devices Litmus^RT
+has, visit the `Tracing` page of the Litmus^RT wiki:
+
+	https://wiki.litmus-rt.org/litmus/Tracing
+
+Note that in the wiki, it is said that "Debug tracing must be enabled at
+compile time.". If you use the `config` file given in the wiki, tracing devices
+are already enabled. The `config` file can be downloaded in:
+
+	https://wiki.litmus-rt.org/litmus/InstallationInstructions
+	[click in "sample 64-bit configuration"]
+
+The RTS wiki also has a page with instructions on the installation of Qemu and
+how to download and compile the kernel. It also mentions how to download and
+compile the feather-trace tools:
+
+	http://rts-wiki/tiki-index.php?page=Installation+Guide
+
+Finally, to transfer the traces (or any files in general) from the Virtual
+Machine (Qemu) to the host machine, or vice-versa, we use a virtual floppy
+device, as described in:
+
+	http://wiki.linuxquestions.org/wiki/Qemu_transfer_files_between_host_and_guest_via_the_floppy_drive
+
+To view the traces, you can download the Unit-trace program:
+
+	http://www.cs.unc.edu/~mollison/unit-trace/index.html
+
+
+Tracing Example
+---------------
+
+We will go through the tracing procedure once. We will use the P-RES scheduler
+plugin, create one reservations and some tasks, trace for a while, and then
+move our trace to the host machine.
+
+The first thing to do is to start the VM. We want to use the option
+
+	-fda <address_of_floppy_device>
+
+to be able to pass data from the VM to the host machine. The line we currently
+use is the following:
+
+	qemu-system-x86_64 -enable-kvm \
+	 -smp 2 \
+	 -hda litmus.img \
+	 -name "Any" -nographic -kernel bzImage -initrd initramfs.igz \
+	 -fda ./floppy \
+	 -append "console=ttyS0,115200"
+
+Note that, because we are passing "-fda ./floppy", we are using the file
+`floppy` as our virtual floppy device. You could of course have used a file in
+any other place.
+
+If no error occurs, then you will have a console waiting for commands. You can
+then change the scheduler to P-RES:
+
+	setsched P-RES
+
+Before creating the reservations and tasks, we want to start tracing:
+
+	st_trace -s test &
+
+Finally, we can create everything:
+
+	# Creates a `polling-periodic` reservation, with ID 1234, period 50,
+	# deadline 50 and bucket 20 in CPU 0.
+	resctrl -c 0 -t polling-periodic -n 1234 -b 20 -p 50 -d 50 -o 0
+
+	# Creates two tasks in the reservation we just created. One of them
+	# has WCET 10 and Period 100; the other has WCET 30 and Period 150.
+	# The tasks will run for 20 seconds.
+	rtspin -w -p 0 -r 1234 10 100 20 &
+	rtspin -w -p 0 -r 1234 30 150 20 &
+
+Because we are passing the "-w" option to the `rtspin`s, we need to call
+
+	release_ts
+
+To start their jobs. They will then run for 20 seconds. After that, you can
+kill `st_trace`. Currently, we kill it with:
+
+	kill -10 <PID OF st_trace>
+
+Notice that we pass "-10" because we had called `st_trace` with the "-s" option,
+that waits for a SIGUSER1 to terminate.
+
+Finally, some files called "st-test-<CPU#>.bin" will appear in your working
+directory. Since we only have tasks scheduled in the CPU 0, we are only
+interested in the `st-test-0.bin`. Now you can create a new folder in your
+working directory and mount the floppy device there:
+
+	mkdir mount_point
+	mount /dev/fd0 ./mount_point
+
+Then copy the traced file to there, and unmount the floppy device:
+
+	cp st-test-0.bin ./mount_point/
+	umount ./mount_point
+
+The traced file is now in the virtual floppy device and ready to be used in the
+host machine. Press "Ctrl+A, X" to close qemu, and then mount the floppy device
+in a folder in your host machine:
+
+	mkdir host_mount_point
+	mount ./floppy host_mount_point
+	cp ./floppy/st-test-0.bin ./
+	umount ./host_mount_point
+
+Now you can call Unit-trace to see the tracing in a graphical and more "user-
+friendly way":
+
+	unit-trace -v st-test-0.bin
+
+A window will open with the trace. Time is measure in microseconds.
+
+
+

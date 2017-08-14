@@ -1,0 +1,164 @@
+John Gamboa
+07/10/2014 -- Last update 12/11/2014
+
+Using the Wip-Reservation Framework for Slot-Shifting
+=====================================================
+
+This file documents a little of what I learned by browsing through the
+wip-reservation framework.
+
+	Summary:
+		- What we were looking for?
+		- What the wip-reservation code has?
+		- Mapping from the wip-reservation code to the parameters we
+			were looking for
+		- Problems with using the wip-reservation framework for Slot
+			Shifting
+			- Splitting intervals
+			- Reservations and continuous time
+			- Running a task outside its reservation
+			- When the hyperperiod wraps around
+		- Alternatives to wip-reservation
+
+
+What we were looking for?
+=========================
+
+The following information should be somehow stored/storable in the
+wip-reservation framework in order to use its code for slot shifting.
+
+For each interval:
+	start slot
+	end slot
+	initial spare capacity
+
+For each offline scheduled task:
+	its interval
+	earliest start time
+	worst case execution time
+	deadline (not actually needed: it is the end of the interval)
+
+
+
+
+What the wip-reservation code has?
+==================================
+
+Refer to wip-reservations.txt for a detailed description of the reservation
+framework.
+
+Mapping from the wip-reservation code to the parameters we were looking for
+===========================================================================
+
+Attempt 1
+---------
+
+At first, the table-driven reservations seem exactly what we want: they have
+intervals (with start and end) and budget information, as well as client tasks.
+
+The table-driven reservations, however, provide no way to assign client tasks to
+specific intervals. This is a problem for slot-shifting. Another problem is that
+the budget information is "shared" among all the intervals pertaining to a
+reservation.
+
+Those reservations are not useless though: since we can have as many
+reservations as we want, we could "abuse" the reservations to make sure they
+always have only one interval, and that these intervals are guaranteed to
+respect the constraints of slot-shifting. We would then have the following
+information about each interval/reservation:
+
+	- its start time
+	- its end time
+	- its budget information (<-- spare capacity?)
+	- its client tasks
+
+Each task has its own "phase" (earliest start time), its own worst case
+execution time and its deadline. This makes sure we have all we want.
+
+
+Problems with attempt 1
+-----------------------
+
+We soon realized there are some problems with using the code the way it is. The
+next sections describe four major problems:
+
+	1) splitting intervals,
+	2) some "continuous time" counting issues,
+	3) running a task outside its reservation, and
+	4) when the hyperperiod wraps around.
+
+
+###Splitting intervals
+
+Because we intended the reservation framework to be transparent to our code, it
+would be a problem to split the intervals after the scheduling is already
+running.
+
+[It is actually not a huge problem (we could change the values inside the data
+structures and insert a new interval in the reservation list) but we find it an
+unnecessary "dirty hack"]
+
+
+###Reservations and continuous time
+
+The reservation framework was developed so that, when a task runs, its
+reservation budget gets updated accordingly. This budget uses continuous time.
+For our purposes, we would have to convert this continuous time always into
+discrete time.
+
+[This is not a huge problem: we could simply do
+
+	(now / slot-size) - start_time
+
+ to get the current slot. In fact, we would still have to do that in any case,
+with or without the reservation framework, unless LITMUS^RT supports discrete
+time in a future version]
+
+We also supposed we could use the budget information inside a reservation to
+calculate the current spare capacity of an interval. The problem is that the
+reservation framework updates the budget information by itself. If a task runs
+outside its interval, we don't want its budget to be updated, rather the budget
+of (maybe) many other reservations. In other words, we cannot apply the
+"borrowing" mechanism with this framework.
+
+
+###Running a task outside its reservation
+
+In fact, actually, we can not run a task outside its reservation. The idea of
+having a reservation was that the tasks run only when they are supposed to run.
+Because of the way the framework is designed, it seems very complicated to
+choose a task that is not in the current reservation to run (and then update the
+spare capacities of all the other affected reservations).
+
+
+###When the hyperperiod wraps around
+
+We would have to store some "backups" of all intervals in case we wanted the
+hyperperiod to smoothly wrap around. We don't see a way to store these backups
+with the transparent implementation of the reservations that we are using.
+
+
+Attempt 2
+---------
+
+We had two alternatives to the wip-reservation framework. The first one was to
+follow the same idea of the reservation system calls and create a new system
+call that would allow us to create our own intervals. The problems with this
+approach are that (1) this would mean a lot of code "replication" (since it
+would have many lines that are too similar to the wip-reservation code), and
+(2) the slot shifting intervals system calls would be very specific for slot
+shifting.
+
+The second idea would be to use the /proc file system to pass data into the
+scheduler. Although the /proc file system was not created to this purpose, it
+is often conveniently abused in this fashion.
+
+
+Attempt 3
+---------
+
+We intend to use only one reservation to the entire Slot Shifting algorithm. The
+is to override the reservation "operation" functions and to add some new data
+structure.
+
+

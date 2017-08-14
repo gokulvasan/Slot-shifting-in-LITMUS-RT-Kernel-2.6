@@ -1,0 +1,91 @@
+#!/bin/bash
+
+PATH_TO_SCRIPT=`dirname $0`
+function find_helper()
+{
+	IN_PATH=`which $1`
+	REL_TO_PATH="$PATH_TO_SCRIPT/$2"
+	if [ -z "$IN_PATH" ] && [ ! -z "$PATH_TO_SCRIPT" ] &&  [ -x "$PATH_TO_SCRIPT/$1" ]
+	then
+		echo "$PATH_TO_SCRIPT/$1"
+	elif [ -z "$IN_PATH" ] && [ ! -z "$PATH_TO_SCRIPT" ] &&  [ -x "$REL_TO_PATH/$1" ]
+	then
+	    echo "$REL_TO_PATH/$1"
+	else
+		echo "$IN_PATH"
+	fi
+}
+
+function die()
+{
+	echo "Error: $*"
+	exit 1
+}
+
+
+[ -z "$FTCAT" ] && FTCAT=`find_helper ftcat ../ft_tools`
+[ -z "$FTCAT" ] && die "Can't find 'ftcat' utility."
+[ -z "$FTDEV" ] && FTDEV=/dev/litmus/sched_trace
+
+if [ "$1" == "-s" ]
+then
+  AUTO=1
+  shift
+fi
+
+PIDS=""
+
+# signal that we're done gathering data and clean up
+on_finish()
+{
+    echo "Ending Trace..."
+    kill $PIDS
+    wait $PIDS
+
+    exit 0
+}
+
+# register shutdown signal handler
+trap 'on_finish' SIGUSR1
+
+
+
+# Setup up sched_trace tracing.
+
+# works for sparc64 and Intel x86 if all CPUs are online
+NUM_CPUS=`egrep -c '^processor|online'   /proc/cpuinfo`
+
+# Trace ID Key:
+# 501 - sched_trace_task_name
+# 502 - sched_trace_task_param
+# 503 - sched_trace_task_release
+# 504 - sched_trace_task_switch_to
+# 505 - sched_trace_task_switch_away
+# 506 - sched_trace_task_completion
+# 507 - sched_trace_task_block
+# 508 - sched_trace_task_resume
+# 509 - sched_trace_action
+# 510 - sched_trace_sys_release
+ST_IDS="501 502 503 504 505 506 507 508 509 510"
+
+TAG=$1
+PIDS=""
+for x in `seq 0 $(($NUM_CPUS - 1))`
+do
+    TARGET="st-${TAG}-${x}.bin"
+    echo -n "CPU $x: "
+    $FTCAT "$FTDEV$x" $ST_IDS > "$TARGET"  &
+    PIDS="$PIDS $!"
+    echo $! "> $TARGET [$?]"
+done
+
+if [[ $AUTO != 1 ]]
+then
+    echo "Press Enter to end tracing..."
+    read
+    on_finish
+else
+    # wait for SIGUSR1 to terminate
+    echo "Waiting for SIGUSR1 to end tracing..."
+    while [ 1 ]; do sleep 10; done
+fi

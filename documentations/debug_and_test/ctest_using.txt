@@ -1,0 +1,129 @@
+John Gamboa
+17/07/2015
+
+Summary
+=======
+
+1. Introduction
+2. Why?
+	2.1. Why to have tests at all
+	2.2. Why to use `ctest`
+3. How?
+4. References
+
+
+Introduction
+============
+
+Many testing frameworks are available for C/C++. We decided to use a very simple
+framework called `ctest`. This document justifies this decision and explains how
+to use it.
+
+Why?
+====
+
+Including tests in our program is including a new overhead, namely, the
+implementation of test cases everytime we write a new module. Is this worth?
+
+Why to have tests at all?
+-------------------------
+
+This project has become bigger than we can manage only with our memory.
+Periodically we include changes in different binaries and have no way to
+guarantee our functions still work or not. Sometimes we find out we broke
+something only weeks after the change, because of another, supposedly unrelated
+change. Fixing these bugs take a lot of time.
+
+Debugging errors in the kernel is very slow and error prone. Sometimes, we
+believe the error is in the kernel, when it is actually in the ss_parser, or
+even in the offline_stage. With testing, we can make changes without worrying,
+guaranteeing some level of correctness every time we modify some module of our
+code.
+
+Why to use `ctest`
+------------------
+
+Actually, three libraries have been checked. We wanted a minimalist framework
+that would not require the user to download or install anything; just use it.
+The reason was that we wanted to minimize the effort to include it to our
+project, learn to use, and use it. We found the following options (and actually
+many more):
+
+  * Catch [2]: Simple to use: just a simple hpp file to be added to the project.
+    The problem was that it was written in C++ and we were afraid that this
+    could end up causing some incompatibility problem in the future.
+
+  * Check [3]: very powerful and popular. Not so simple to use. Required us to
+    install (`apt-get install`) a package, or download/compile the framework
+    from source.
+
+  * ctest [1]: also simple to use and completely in C. Probably not so powerful,
+    but seemed to fit our needs (and we had already some example code using it).
+
+How?
+====
+
+To use ctest, we have to create a new binary and "#include" its ".h" file. Take
+a look at the `tests.c` file in `ss_parser/tests/" for an example of how the
+main function should look like. It has also examples of all constructs described
+below.
+
+To define a test, one can simply write
+
+	CTEST2(<suite_name>, <test_name>) {
+		// things to run, e.g.,
+		// often include some "ASSERT_EQUAL(...)", or "ASSERT_STR(...)"
+		// [take a look at the ctest documentation in [3] or simply read
+		// the .h file to know what are all existing ASSERT_###]
+	}
+
+Tests are grouped in "suites". Sometimes, one needs to run some lines of code
+before calling the function he wants to test. These lines are often the same for
+many test cases of a certain suite. To avoid code repetition, one can use
+
+	CTEST_SETUP(<suite_name>) {
+		// Code to run before each test of this suite
+	}
+
+The opposite of "CTEST_SETUP" is "CTEST_TEARDOWN". It will execute after each
+test. In languages like Python, CTEST_TEARDOWN is often ignored because of its
+garbage collector. In C, it is important to use this function to free()
+pointers and avoid leaks.
+
+Finally, sometimes one may need to pass data to the tested function. The macro
+CTEST_DATA can be used for that matter:
+
+	CTEST_DATA(<suite_name>) {
+		// variable declarations, like
+		int a;
+		struct my_data *m;
+	};
+
+It is important to notice two things when using CTEST_DATA. First, this macro
+will result in the declaration of a `struct <suite_name>_data`, with the
+declared variables. We can use this type when declaring functions we would like
+to call inside each test.
+
+Second, a variable pointer called "data" will be accessible in each test of the
+suite. This means that, for example, to access the integer "a" in the example
+above, one needs to write "data->a" in the test. The example below shows a test
+that access that integer:
+
+	CTEST2(my_suite, my_test1) {
+		data->m = function_to_be_test(data->a);
+		ASSERT_NULL(m);
+	}
+
+
+References
+==========
+
+[1] `ctest` project in GitHub:
+	https://github.com/bvdberg/ctest
+
+[2] `Catch` project in GitHub:
+	https://github.com/philsquared/Catch
+
+[3] `Check` project in SourceForge:
+	http://check.sourceforge.net/
+

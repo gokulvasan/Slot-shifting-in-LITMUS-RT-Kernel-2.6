@@ -1,0 +1,19 @@
+
+
+21-Aug-2015
+-----------
+	1. Original implementation of Professor : end of september.
+	2. code cleanup: Class Based reusability ( OOC )
+	3. syscalls cleanup:
+		3.1. reservation time needs to be calculated in userspace.
+		3.2. Aperiodic count needs to come from userspace.
+	4. Soft Aperiodic support framework.
+	5. partitioned framework
+	6. Global framework.
+	7. Stefan implementation
+	8. event based SS
+	9. Configurable Parser
+	10. HP wrap around interval count needs better implementation.
+---------
+
+	

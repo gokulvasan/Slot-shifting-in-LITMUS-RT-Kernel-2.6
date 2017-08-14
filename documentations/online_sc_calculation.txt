@@ -1,0 +1,229 @@
+John Gamboa and Gokul Vasan
+17/07/2015
+
+Summary
+=======
+
+1. Introduction
+2. Implementations
+	2.1. Spare Capacity Traditional Calculation
+	2.2. Spare Capacity Alternative Calculation
+		2.2.1 General Idea
+		2.2.2 With Interval Splitting
+	2.3. Currently Implemented Calculation
+3. References
+
+Introduction
+============
+
+Spare Capacities have to be calculated online in Slot Shifting after a new
+aperiodic function is accepted. The way to do this calculation is not explicitly
+defined in the Slot Shifting article [1]. The "Traditional Way" is to assume it
+is done in the same way as in the Offline Phase of the algorithm. This approach
+does not take into account some information that is already existent, namely,
+the already previously calculated intervals' spare capacities.
+
+The "Alternative Approach" takes this information into account. This avoid the
+sum of the WCET of all jobs pertaining to a given interval, and may provide
+efficiency gains.
+
+
+Spare Capacity Traditional Calculation
+--------------------------------------
+
+// Read the article... no innovation here
+
+
+Spare Capacity Alternative Calculation
+--------------------------------------
+
+### General Idea
+
+The spare capacity of the interval that was already split reduces exactly by the
+size of the new interval, which "steals" its spare capacity:
+
+	SC_new(I_split) = SC_old(I_split) - |I_new|
+
+The spare capacity of the new interval can be calculated by definition, since we
+know its length, the WCET of its only task, and, now, the new spare capacity of
+the split interval:
+
+	SC_new(I_new) = |I_new| - WCET(T) + min(0, SC_new(I_split))
+
+It this spare capacity is negative, other interval's SC will need to be updated.
+Our goal is to reuse the already calculated spare capacity of a given interval
+to find out its new spare capacity. As we know, the formula for the calculation
+of a spare capacity is
+
+	SC(I) = |I| - SUM(WCET(T) | T pertain to I) + min(0, SC(I_next))
+
+It makes no sense to think that the arrival of a new task will raise the spare
+capacity of any interval. So, for any interval, the new spare capacity will be
+
+	SC_new(I) = SC_old(I) + delta, where delta <= 0
+
+For all intervals except the interval that received a new task, if the next
+interval's spare capacity was previously greater or equal to 0 and is still
+greater or equal to 0, then the spare capacity keeps unchanged. 
+
+So, as we can see, the value of "delta" is dependent on how "more negative" the
+spare capacity of the next interval became. An initial try could be to try
+
+	delta = min(0, SC(I_next))
+
+This won't work in the case when the spare capacity of Inext was already
+negative. If it was already negative, delta will lower too much the spare
+capacity of I. To take this into account, I found the following sollution:
+
+	delta = min(0, SC_new(I_next) - min(0, SC_old(I_next)))
+	, where SC_new(I_next) is the new calculated spare capacity of I_next
+	and SC_old(Inext) is the spare capacity of I next before the splitting
+
+A final formula that works always is the following:
+
+	SC_new(I) = SC_old(I) + min(0, [SC_new(I_next) - min(0, SC_old(I_next)])
+
+In the next session, we solve some problems that arise from the definition of
+"SC_new(Inext)" and "SC_old(Inext)".
+
+In the Traditional Way, according to [1], the spare capacities calculation has
+to be done for "all intervals I_i, c <= i <= I_i+1,right" (p. 156), i.e., for
+all intervals from the current interval "c" to the interval that was split (or,
+if there was no splitting, to the interval that received the aperiodic). If this
+calculation was done in the same way as in the offline stage of Slot Shifting,
+it would have to be done from "right to left", because of the influence that any
+interval `k+1` could have (if its spare capacity is negative) in the `k`-th
+interval.
+
+This procedure could be optimized in the following way: if the influence of a
+given interval I_k+1 into the spare capacity of its previous interval I_k is
+zero (i.e., I_k+1 has spare capacity greater or equal to zero) then the spare
+capacity of k does not need to be recalculated. This means that we can stop
+recalculating the spare capacities as soon as we reach an interval whose new
+spare capacity is positive.
+
+Using this premise, we can also simplify our formula:
+
+	delta = SC_new(I_next) - min(0, SC_old(I_next))
+	and thus
+	SC_new(I) = SC_old(I) + [SC_new(I_next) - min(0, SC_old(I_next)]
+
+
+### With Interval Splitting
+
+When an interval has to be split, the calculations remain exactly the same. The
+only exception is the calculation of the first interval to the left of the newly
+created one. Suppose the following scenarion:
+
+	----------|----------|--------------------------|------>
+	    I0         I1                 I2
+
+Let's now see what would happen when I2 is split into I2_right and I2_left:
+
+	----------|----------|-------------|------------|------>
+	    I0         I1        I2_left      I2_right
+
+As we already know, the spare capacity of I2_right will be:
+
+	SC_new(I2_right) = SC_old(I2_right) - |I2_left|
+
+And the spare capacity of I2_left is calculated by definition:
+
+	SC_new(I_new) = |I_new| - WCET(T) + min(0, SC_new(I_split))
+
+A problem, however, would occur if we tried to apply this new method to
+calculate the spare capacity of I1:
+
+	delta = SC_new(I_next) - min(0, SC_old(I_next))
+	SC_new(I) = SC_old(I) + delta
+
+When developing this formula, we said that `delta` should compensate for the
+already borrowed slots to the "next" interval. But now, the "next" interval has
+changed, and I2 will actually start lending to I2_left. This way, delta should
+discount the borrowings for I2_right and count the borrowings for I2_left:
+
+	SC_new(I2) = SC_old(I2) + [SC_new(I2_left) - min(0, SC_old(I2_right))]
+
+
+
+Currently Implemented Calculation
+---------------------------------
+Author: gokulvasan and John Gamboa
+
+/*
+ * DEFINITION :
+ *                DL(task) : deadline of task
+ *                START(interval) : start of interval
+ *                END(interval) : end of interval
+ *                SC(interval) : Spare capacity of interval
+ *                PREV(interval) : returns previous interval
+ *                ADD_PREV(new_interval, interval): adds new_interval before interval to list
+*/
+
+/* 
+ * @ dl_interval : interval in which aperiodic deadline falls.
+ * @ aper : aperiodic task that cleared acceptance test. 
+ * @ curr_slot: current slot the execution decision is.
+*/
+Guarantee_algorithm ( dl_interval , aper, curr_slot) {
+        
+        new_interval = NULL;
+
+        if(DL(aper) < END(dl_interval) ) {
+                split_point = DL(aper) - START(dl_interval);
+                new_interval = split_interval(dl_interval, split_point, curr_slot);
+        }
+
+        INTERVAL(aper) = new_interval ? new_interval : dl_interval;
+
+        delta = WCET(aper);
+        intr = INTERVAL(aper);
+
+        while(delta) {
+                if(SC(intr) > 0) {
+                        if(SC(intr) >= delta) {
+                                SC(intr) = SC(intr) - delta;
+                                delta = 0;
+                        }
+                        else {
+                                delta = delta - SC(intr);
+                                SC(intr) = -delta;
+                        }
+                }
+                else {
+                        SC(intr) += -delta;
+                }
+                intr = PREV(intr);
+        }
+}
+
+interval split_interval(interval_right, split_point, curr_slot) {
+        
+        if(interval_right == curr_interval) {
+                new_interval_len = (split_point + START(interval_right)) - curr_slot;
+        }
+        else {
+                new_interval_len = (split_point + START(interval_right)) - START(interval_right);
+        }
+
+        SC(interval_right)  = SC(interval_right) - new_interval_len
+
+        SC(interval_left) = new_interval_len + min(0, SC(interval_right));
+        END(interval_left) = split_point + START(interval_right);
+        START(interval_left) = START(interval_right);
+
+        START(interval_right) = (split_point + START(interval_right));
+	ADD_PREV(interval_left, interval_right);
+
+        return interval_left;
+}
+
+
+
+References
+==========
+
+[1] Fohler, Gerhard. "Joint scheduling of distributed complex periodic and hard
+	aperiodic tasks in statically scheduled systems." Real-Time Systems
+	Symposium, 1995. Proceedings., 16th IEEE. IEEE, 1995.
+

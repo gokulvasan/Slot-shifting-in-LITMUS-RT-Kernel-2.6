@@ -1,0 +1,83 @@
+Author: GokulVasan [gokulvas@gmail.com]
+Overview: 
+we tried to implement Slot shifting as a platform independent framework, 
+where porting to any RTOS is made possible by simple filling of platform 
+dependent plugin functions.
+The framework design approach is made scalable, i.e. framework is designed with 
+scalable data handling class which can be tuned to either Global/partioned/hybrid
+selection function.
+Algorithmic part is also made scalable, i.e. the functions in algorithmic part are
+very much made disassociated enabling the replacing of any core functionality with other.
+
+CLASSIFICATION OF FRAMEWORK:
+The framework is divided into many classes which are disassociated from each other.
+Following are the classes of the framework.
+1. Algorithmic class
+2. Data class
+3. OS Functionality class
+4. Wrap around class
+5. init class.
+6. decision class.
+
+1. Algorithmic Class :
+	Contains core algorithm of the slot shifting implementation.
+	the algorithm itself can be subdivided into 3 major parts.
+		1. selection functionality.
+		2. Acceptance and Guarantee functionality.
+		3. interval functionality.
+
+	1.1. selection Functionality :
+		selects who has to run next, this bascically runs through EDF on ready queue.
+
+	1.2. Acceptance and Guarantee Functionality : 
+		On a Firm Aperiodic task Arrival acceptance and Guarantee functionality is responsible for
+execution of the task within its deadline; for acheiving such a functionality first we need to search whether 
+the task has enough exection time within its deadline, this functionality of checking availability is carried 
+forward by acceptance test, but to make sure that once it is accepted it should meets its execution within its
+deadline which is carried forward by Guarantee Algorithm. 
+		These 2 functionality are 2 different algorithms that are closely bind as it performs one major 
+task of accomodating a random arriving task to be part of normal EDF selection Functionality.
+		
+	1.3. Interval Functionality:
+		Main functionality of this module is to manage intervals Spare Capacity and update the current
+interval based on the slot number.
+
+	Exposed API: 
+		.slot_shift_core(struct slot_shift*)
+			this is the main selction functionality. along with selection of the next task this
+also runs acceptance and guarantee algorithms.
+
+2. Data Class:
+	Manages the instance and data of tasks, intervals and execution.
+	Manages Task through customized state Transition Graph. 
+	provides the Algorithmic class a abstract set of API's to fetch and put data.
+	creates a great level of abstraction on internal data handling.
+	further divided into following submodules.
+		1. Guaranteed Task handling
+		2. Non-Guaranteed Task handling
+		3. Interval Data Handling.
+
+	Exposed API: 
+		1. update_tsk_state : moves the task to different states based on selction decision
+		2. update_tsk_quantum : updates the task execution time.
+		3. update_tsk_q_state : moves the task among Unconcluded/ guaranteed and not guaranteed queues.
+					strictly works with state transition graph.
+		
+3. OS Functionality Class:
+	intimates the OS on specific decision taken within the framework.
+	This are plugin functions which is very much platform dependent.
+
+4. Wrap Around Functionality: 
+	This is an additional feature to wrap the Hyper period.
+	Majorly called in Data handling functionality.
+
+5. Init Class:
+	This is an optional feature used to initialize the aperiodic tasks.
+	Majorly used in monolithic kernel like Linux but can also be used on other types of OS where the event
+based Task should be initialized before it can actually run.
+
+6. decision Class: 
+	Decides on when the selction functionality should be called. 
+	This is OS specific and completely decoupled from other classes.
+	In Linux this is majorly a HRTIMER based trigger, where the trigger is based on slot period.
+

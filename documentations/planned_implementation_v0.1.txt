@@ -1,0 +1,207 @@
+	NB: This file is out of date.
+	    The implementation is not the way it is described here!.
+
+
+Summary
+=======
+
+1. Introduction
+2. Implementation Overview
+3. Some LITMUS^RT Functions and Concepts
+4. Implementation Details
+
+
+Introduction
+============
+
+This document present an overview of the current planned implementation of
+Slot-Shifting as a scheduling plugin for LITMUS^RT.
+
+
+Overview
+========
+
+Supposing:
+
+  1. `schedule()` is only called between slots.
+  2. Litmus updates running queues for us.
+
+In a very abstract way, our implementation should follow the following format.
+
+	schedule()
+	    |
+	    +---> update_current_state()
+	    |         |
+	    |         +---> update_current_slot()
+	    |         |
+	    |         +---> update_current_interval()
+	    |
+	    +---> acceptance_test()   [if we want it in `schedule()`]
+	    |
+	    +---> guarantee_algorithm()
+	    |         |
+	    |         +---> split_interval() (maybe)
+	    |         |
+	    |         +---> calculate_spare_capacities()
+	    |
+	    +---> choose_task_to_run()
+	    |
+	    +---> calculate_spare_capacities()
+
+
+Some LITMUS^RT Functions and Concepts
+=====================================
+
+Implementing a new scheduler in Litmus means implementing a set of functions
+belonging to `struct sched_plugin` and inserting this structure into Litmus data
+structures.
+
+A description of these functions can be found at `sched_plugin.h`. We describe
+below the ones that are important to us.
+
+  * schedule(): called by Litmus when a schedule decision needs to be made.
+  * finish_switch(): called by Litmus when context switch is completed.
+  * admit_task(): called by Litmus when a new task arrives (an acceptance test
+	can be done here.
+  * task_new(): called by Litmus when a task becomes a Real Time task (i.e.,
+	usually soon after `admit_task()` was called and returned success).
+  * task_wakeup(): called by Litmus when a task is moved from the "wait queue" to
+	the "ready queue".
+  * task_block(): called by Litmus when a task moves to the "wait queue".
+  * task_exit(): called by Litmus when a task becomes a non-Real Time task or is
+	finished.
+  * task_cleanup(): called by Litmus after task_exit(), for cleanup procedures.
+  * activate_plugin(): called by Litmus when the plugin is activated.
+  * deactivate_plugin(): called by Litmus when the plugin is deactivated.
+
+According to Professor Brandenburg's thesis, the `tick()` function should be
+implemented for time triggered schedulers.
+
+There is also an "init" function that is called when the scheduler plugin is
+registered (i.e., inserted in Litmus data structures).
+
+
+Implementation Details
+======================
+
+Assumptions:
+------------
+
+ 1. However we create the intervals, it is independent of the structure that
+	follows.
+ 2. There is a function called `reschedule()` that, as a side effect, causes
+	Litmus to call the `schedule()` function.
+ 3. The acceptance test is cheap enough to be called during a slot.
+
+
+The schedule() function
+-----------------------
+
+Although Slot-Shifting theoretically expects the scheduling decisions to be
+taken only between slots, the schedule function could be called at many moments
+other than that. We believe there are three cases:
+
+ 1. We are still not scheduling anything
+
+	schedule()
+	    |
+	    +---> schedul_bg_task()
+
+ 2. We are already scheduling, and we were called in the middle of a slot
+
+	schedule()
+	    |
+	    +---> choose_task_to_run()
+	    |
+	    +---> calculate_spare_capacities() (because maybe a task is exiting
+						and we want to raise some spare
+						capacities)
+
+ 3. We are already scheduling, and we were called between slots
+
+	schedule()
+	    |
+	    +---> update_current_state()
+	    |         |
+	    |         +---> update_current_slot()
+	    |         |
+	    |         +---> update_current_interval()
+	    |
+	    +---> guarantee_algorithm()
+	    |         |
+	    |         +---> split_interval() (maybe)
+	    |         |
+	    |         +---> calculate_spare_capacities()
+	    |
+	    +---> choose_task_to_run()
+	    |
+	    +---> calculate_spare_capacities()
+
+
+
+Other Litmus hooks
+------------------
+
+What follows is the structure of the needed functions:
+
+
+	task_block()
+	    |
+	    +---> reschedule()
+
+
+	task_wake_up()
+	    |
+	    +---> unqueue()
+	    |
+            +---> release_at() (tell the task when to release a new job)
+	    |
+	    +---> requeue()
+	    |
+	    +---> reschedule()
+
+
+	task_exit()
+	    |
+	    +---> unqueue()
+	    |
+	    +---> reschedule()
+
+
+	task_cleanup()
+	    |
+	    +---> free_task_data_structures()
+
+
+	admit_task()
+	    |
+	    +---> acceptance_test()
+
+
+	task_new()
+	    |
+	    +---> enlist_accepted() (stores task data structures so they are
+	    |				dealt with in `schedule()`)
+	    +---> enqueue() (should we always `enqueue()`?)
+	    |
+	    +---> reschedule()
+
+
+	activate_plugin()
+	    |
+	    +---> initialize_data_structures()
+
+
+	deactivate_plugin()
+	    |
+	    +---> deallocate_data_strucures()
+
+
+	init_function()
+	    |
+	    +---> initialize_needed data_structures()
+	    |
+	    +---> register_sched_plugin()
+
+
+
