@@ -1,3 +1,6 @@
+Implementation of Slotshifting scheduler Algorithm in Linux kernel using Litmus-RT Patch
+=========================================================================================
+
 Authors: 
 * Gokulvas@gmail.com
 * vaulttech@gmail.com
@@ -15,9 +18,9 @@ GOAL :
 
 FILES :
 -------
-* /kernel/litmus/ss_reservations.c
-* /kernel/include/litmus/ss_reservations.h
-* /kernel/include/litmus/ss_inj_data.h
+* Online implementation: [/kernel/litmus/ss_reservations.c](https://github.com/gokulvasan/Slot-shifting-in-LITMUS-RT-Kernel-2.6/blob/master/kernel/litmus/ss_reservations.c)
+* Data structures: [/kernel/include/litmus/ss_reservations.h](https://github.com/gokulvasan/Slot-shifting-in-LITMUS-RT-Kernel-2.6/blob/master/kernel/include/litmus/ss_reservations.h)
+* Offline computed table of jobs and intervals Data structure: [/kernel/include/litmus/ss_inj_data.h](https://github.com/gokulvasan/Slot-shifting-in-LITMUS-RT-Kernel-2.6/blob/master/kernel/include/litmus/ss_inj_data.h)
 
 The design approach of slot shifting framework is made SCALABLE.
 
