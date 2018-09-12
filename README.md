@@ -1,10 +1,14 @@
 Implementation of Slotshifting scheduler Algorithm in Linux kernel using Litmus-RT Patch
 =========================================================================================
 
-Authors: 
-* Gokulvas@gmail.com
-* vaulttech@gmail.com
+Authors:
+--------
 
+* Gokul Vasan: Gokulvas@gmail.com
+* John Gamboa: vaulttech@gmail.com
+
+Overview:
+---------
 * Implement Slot shifting scheduler as a platform independent framework.
   * **What  is slotshifting?**
     *  Time division based work conserving periodic task scheduling algorithm that tries admit Firm-aperiodics.
