@@ -5,11 +5,10 @@ Authors:
 * Gokulvas@gmail.com
 * vaulttech@gmail.com
 
-GOAL :
------
 * Implement Slot shifting scheduler as a platform independent framework.
-  * What  is slotshifting?
-    * One among the few scheduling algorithms that guarantees aperiodics on admittance.
+  * **What  is slotshifting?**
+    *  Time division based work conserving periodic task scheduling algorithm that tries admit Firm-aperiodics.
+If Firm aperiodic is admitted, Then it is guaranteed to be provided with enough slots to complete before deadline.
     * [Algorithmic View of slot shifting]( https://github.com/gokulvasan/Slot-shifting-in-LITMUS-RT-Kernel-2.6/blob/master/documentations/SlotShifting.pdf )
     * [original paper](https://www.slideshare.net/slideshow/embed_code/key/PJt8vhtGcHvKQ)
 * porting to any RTOS should be a simple process of filling platform dependent plugin functions.
