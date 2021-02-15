@@ -9,9 +9,9 @@ Authors:
 
 Overview:
 ---------
-* Implement Slot shifting scheduler as a platform independent framework.
+* Implementation of Slot shifting scheduler as a platform independent framework.
   * **What  is slotshifting?**
-    *  Time division based work conserving periodic task scheduling algorithm that tries admit Firm-aperiodics.
+    *  Time division based, work conserving periodic task scheduling algorithm that attempts gaurantee and admit the Firm-aperiodics.
 If Firm aperiodic is admitted, Then it is guaranteed to be provided with enough slots to complete before deadline.
     * [Algorithmic View of slot shifting]( https://github.com/gokulvasan/Slot-shifting-in-LITMUS-RT-Kernel-2.6/blob/master/documentations/SlotShifting.pdf )
     * [original paper](https://www.slideshare.net/slideshow/embed_code/key/PJt8vhtGcHvKQ)
@@ -29,13 +29,14 @@ The design approach of slot shifting framework is made SCALABLE.
 
 SCALABILITY:
 -----------
-* framework is designed with scalable data handling class which can be tuned to either Global/partioned/hybrid selection function. 
-* Algorithmic part is made portable,i.e., the functions in algorithmic part are very much made disassociated enabling the replacing of any core functionality with other.
+* The framework is designed for scalable data handling which can be tuned to be either Global/Partioned/Hybrid selection function. 
+* Algorithmic part is made portable,i.e., the functionality of the algorithmic class is disassociated from the platform. This enables poratability to any platform.
+* Further, functionalities are very well abstracted from one another enabling replacement of any core functionality with the other.
 
 USERSPACE:
 -----------
 * A generic slot shifting specific table parser.
-* A seperate distrubition is built with Busybox.
+* A seperate Linux distrubition is built with Busybox to avoid scheduling noise.
 
 Highlights:
 * Slot shifting is implemented generically independent of platform.
